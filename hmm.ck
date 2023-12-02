@@ -1,3 +1,32 @@
+// Feature extraction
+adc => FFT fft =^ Centroid cen =^ FeatureCollector fc => blackhole;
+
+fc.upchuck();
+fc.fvals().size() => int NUM_DIMENSIONS;
+
+// set FFT size
+1024 => fft.size;
+// set window type and size
+Windowing.hann(fft.size()) => fft.window;
+// our hop size (how often to perform analysis)
+(fft.size()/2)::samp => dur HOP;
+
+function void featureExtract(){
+
+    while(true){
+
+        fc.upchuck();
+
+        for( int d; d < NUM_DIMENSIONS; d++ )
+            {
+                <<< fc.fval(d)>>>;
+            }
+        HOP => now;
+    }
+}
+//-----------------------------------------------------------
+
+// Operator overload
 public int[] @operator !( int triggers[] )
 { 
     int toReturn[0];
@@ -19,11 +48,31 @@ public int[] @operator <<( int one[], int two[] )
     }
     return toReturn; 
 }
+//----------------------------------------------------------
 
-GG.fullscreen();
+//chuGL 
+// GG.fullscreen();
 
-// shorthand for our scene root
 GG.scene() @=> GScene @ scene;
+
+PlaneGeometry planeGeo;
+planeGeo.set(16,9,100,100);
+
+ShaderMaterial shaderMat;
+GMesh mesh;
+
+mesh.set( planeGeo, shaderMat );
+mesh --> scene;
+
+ShaderTools st;
+global ShaderType ShaderCode;
+
+st.osc(100,0.1,0.5) 
+    -> st.modulateKaleid(st.osc(2,0.2,1))
+     -> st.kaleid(4)
+    -> st.mask(st.shape(4) -> st.invert() -> st.scale(2.9))
+    -> st.add(st.osc() -> st.kaleid())
+    @=> ShaderCode;
 
 GPlane plane[48];
 GMesh ggens[0];
@@ -35,14 +84,15 @@ for(auto p: plane){
 
 for(int i; i < 6; i++){
     for(int j; j < 8; j++){
-        1.1 * i - 3 => ggens[(i*8)+j].posY;
+        1.1 * i - 2.75 => ggens[(i*8)+j].posY;
         1.1 * j - 4 => ggens[(i*8)+j].posX;
     }
 }
 
 GG.camera() --> scene;
 GG.camera().posZ( 10 );
-
+//-----------------------------------------------------------
+//chAI mixed with some chuGL
 1::minute/130/2 => dur T;
 
 SndBuf bd => dac;
@@ -85,8 +135,8 @@ fun void update()
 {
     [0,0,0,0,1,0,0,0] << [1,0,0,1,0,0,0,0] << observationsbd << observationshh << observationsoh << observationsbass @=> fullInfo;
     for(int i; i < 48; i++){
-        if(fullInfo[i]) @(0,1,0) => ggens[i].mat().color;
-        else {@(1,0,0) => ggens[i].mat().color;}
+        if(fullInfo[i]) @(1,1,1) => ggens[i].mat().color;
+        else {@(0.1,0.1,0.1) => ggens[i].mat().color;}
     }
     GG.camera().lookAt( GG.scene().pos() );
 }
@@ -130,5 +180,8 @@ spork~player(hmmBass,bass,T,observationsbass);
 while( true )
 {
     update();
+    shaderMat.uniformFloat("u_Time", now/second);
+    //Update shader graph
+    shaderMat.fragString(st.shader(ShaderCode));
     GG.nextFrame() => now;
 }
